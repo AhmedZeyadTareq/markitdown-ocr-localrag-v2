@@ -24,6 +24,7 @@ You must install Tesseract separately because `pytesseract` is only a Python wra
 
 - **Windows:**
   - Download from: https://github.com/tesseract-ocr/tesseract
+  - https://github.com/UB-Mannheim/tesseract/wiki
   - Add the Tesseract installation path (e.g., `C:\Program Files\Tesseract-OCR`) to your system PATH.
 
 - **Linux (Ubuntu):**

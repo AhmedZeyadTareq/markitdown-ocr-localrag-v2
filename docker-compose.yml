@@ -1,0 +1,49 @@
+# Everything in containers, including Ollama, for computers that don't have Ollama installed.
+#   docker compose up -d                 then open http://localhost:8080
+# The app image is downloaded ready-made from GitHub; to build it from this folder instead: docker compose up -d --build
+# The first start downloads the model (gemma3:12b is about 8 GB); follow it with: docker compose logs -f model
+# NVIDIA GPU:   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+# Other model:  set OLLAMA_MODEL in a .env file next to this one, e.g.  OLLAMA_MODEL=gemma3:4b
+name: markitdown-ocr-localrag
+
+services:
+  app:
+    image: ghcr.io/ahmedzeyadtareq/markitdown-ocr-localrag-v2:latest
+    build: .
+    ports:
+      - "8080:8000"
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma3:12b}
+    volumes:
+      - data:/data
+    depends_on:
+      model:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:0.40.13
+    volumes:
+      - ollama:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  # Pulls the model once, then exits. Already-downloaded models are skipped quickly on later starts.
+  model:
+    image: ollama/ollama:0.40.13
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["ollama", "pull", "${OLLAMA_MODEL:-gemma3:12b}"]
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: "no"
+
+volumes:
+  data:     # documents, extracted text, search indexes, settings
+  ollama:   # downloaded models

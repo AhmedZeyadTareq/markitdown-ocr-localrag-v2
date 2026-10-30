@@ -1,0 +1,106 @@
+@import "tailwindcss";
+
+@theme {
+  --color-paper: #e9ede9;
+  --color-sheet: #fbfcfa;
+  --color-ink: #22312b;
+  --color-moss: #2f6650;
+  --color-moss-deep: #234f3e;
+  --color-muted: #6b7a73;
+  --color-line: #d3dad5;
+  --color-mark: #f3dc4f;
+  --color-danger: #a3402f;
+
+  --font-sans: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-source-serif), ui-serif, Georgia, serif;
+}
+
+/* Unlayered CSS beats Tailwind utilities, so custom rules live in layers that utilities can override */
+@layer base {
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-moss);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+}
+
+@layer components {
+  /* Document text, set like a printed page */
+  .sheet-prose {
+    font-family: var(--font-serif);
+    font-size: 1.0625rem;
+    line-height: 1.7;
+    max-width: 68ch;
+  }
+  .sheet-prose h1 { font-size: 1.75rem; line-height: 1.25; font-weight: 600; margin: 0.25em 0 0.4em; }
+  .sheet-prose h2 { font-size: 1.35rem; line-height: 1.3; font-weight: 600; margin: 0.2em 0 0.3em; }
+  .sheet-prose h3, .sheet-prose h4 { font-size: 1.1rem; font-weight: 600; margin: 0.2em 0 0.2em; }
+  .sheet-prose p { margin: 0; }
+  .sheet-prose ul, .sheet-prose ol { padding-left: 1.4em; }
+  .sheet-prose ul { list-style: disc; }
+  .sheet-prose ol { list-style: decimal; }
+  .sheet-prose strong { font-weight: 600; }
+  .sheet-prose em { font-style: italic; }
+  .sheet-prose a { color: var(--color-moss); text-decoration: underline; }
+  .sheet-prose code { font-size: 0.9em; background: var(--color-paper); padding: 0.1em 0.3em; border-radius: 3px; }
+  .sheet-prose pre { overflow-x: auto; background: var(--color-paper); padding: 0.75em 1em; border-radius: 4px; }
+  .sheet-prose pre code { background: none; padding: 0; }
+  .sheet-prose table { border-collapse: collapse; font-size: 0.95em; display: block; overflow-x: auto; }
+  .sheet-prose th, .sheet-prose td { border: 1px solid var(--color-line); padding: 0.35em 0.7em; text-align: left; vertical-align: top; }
+  .sheet-prose th { font-weight: 600; background: color-mix(in oklab, var(--color-paper) 60%, white); }
+  .sheet-prose blockquote { border-left: 3px solid var(--color-line); padding-left: 1em; color: var(--color-muted); }
+  .sheet-prose hr { border: 0; border-top: 1px solid var(--color-line); }
+
+  /* A highlighter stroke drawn across passages an answer came from */
+  .doc-block {
+    background-image: linear-gradient(color-mix(in oklab, var(--color-mark) 62%, transparent), color-mix(in oklab, var(--color-mark) 62%, transparent));
+    background-repeat: no-repeat;
+    background-size: 0% 100%;
+    transition: background-size 650ms cubic-bezier(0.3, 0.7, 0.2, 1);
+  }
+  .doc-block.is-marked {
+    background-size: 100% 100%;
+  }
+  .doc-block.is-related {
+    background-image: linear-gradient(color-mix(in oklab, var(--color-mark) 22%, transparent), color-mix(in oklab, var(--color-mark) 22%, transparent));
+  }
+}
+
+/* The reading band that sweeps down a sheet while a document is being processed */
+@keyframes read-sweep {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(520%); }
+}
+.reading-band {
+  animation: read-sweep 2.4s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in oklab, var(--color-mark) 45%, transparent) 50%,
+    transparent
+  );
+}
+
+@keyframes caret-blink {
+  50% { opacity: 0; }
+}
+.answer-caret {
+  animation: caret-blink 1s steps(1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .doc-block { transition: none; }
+  .reading-band { animation: none; opacity: 0.6; transform: translateY(150%); }
+  .answer-caret { animation: none; }
+}

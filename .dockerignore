@@ -1,0 +1,17 @@
+# Keep the build context small and free of local data
+.git
+.venv
+venv
+**/__pycache__
+**/*.pyc
+.pytest_cache
+outputs
+tests
+web/node_modules
+web/.next
+web/out
+web/*.tsbuildinfo
+*.md
+!web/README.md
+.env
+.claude

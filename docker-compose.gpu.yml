@@ -1,0 +1,12 @@
+# Gives the Ollama container access to NVIDIA GPUs. Use together with docker-compose.yml:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+# Needs an NVIDIA driver, plus the NVIDIA Container Toolkit on Linux (Docker Desktop on Windows includes GPU support).
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

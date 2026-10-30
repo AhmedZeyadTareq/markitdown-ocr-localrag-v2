@@ -11,6 +11,7 @@ from backend import storage
         ("report.pdf", "report_pdf"),
         ("My Report (v2).PDF", "My_Report_v2_PDF"),
         (r"C:\docs\..\evil.txt", "evil_txt"),
+        ("../../etc/passwd", "passwd"),
         ("notes", "notes"),
         ("...", "document"),
     ],

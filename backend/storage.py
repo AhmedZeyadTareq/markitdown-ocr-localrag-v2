@@ -22,8 +22,14 @@ from backend import config
 VERSIONS = ("raw", "organized")
 
 
+def base_name(filename):
+    """The file's own name. Splits on both / and \\, since uploads from Windows can carry backslash paths
+    and os.path.basename on Linux (e.g. in Docker) only splits on /."""
+    return re.split(r"[\\/]", filename)[-1]
+
+
 def doc_id_for(filename):
-    name, ext = os.path.splitext(os.path.basename(filename))
+    name, ext = os.path.splitext(base_name(filename))
     # Include the extension so report.pdf and report.docx don't share (and reuse) each other's outputs
     doc_id = f"{name}_{ext.lstrip('.')}" if ext else name
     doc_id = re.sub(r"_+", "_", re.sub(r"[^\w.-]+", "_", doc_id))
@@ -125,10 +131,10 @@ def save_upload(filename, data):
 
     for old in glob.glob(os.path.join(paths["folder"], "original.*")):
         os.remove(old)
-    ext = os.path.splitext(filename)[1].lower()
+    ext = os.path.splitext(base_name(filename))[1].lower()
     with open(os.path.join(paths["folder"], f"original{ext}"), "wb") as f:
         f.write(data)
-    write_meta(paths, filename=os.path.basename(filename), source_path=None)
+    write_meta(paths, filename=base_name(filename), source_path=None)
     return doc_id
 
 

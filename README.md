@@ -10,43 +10,127 @@ It comes as a web app, a command-line tool, and a ready-made Docker image.
 
 ## 🐳 Quick start with Docker
 
-You only need [Docker](https://www.docker.com/products/docker-desktop/). The image contains the web app, the API, Tesseract, Poppler, and the search model, and works without internet once the models are downloaded. Ollama, which runs the AI model, runs separately: either the one already on your computer, or a container started for you.
+With Docker you don't install Python, Node.js, Tesseract, or anything else: it's all inside the image (web app, API, OCR tools, and search model). Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) and make sure it's running.
 
-### Option A: you already have Ollama
-```bash
-docker run -d --name markitdown-ocr-localrag -p 127.0.0.1:8080:8000 -v markitdown-ocr-localrag-data:/data \
-  --add-host=host.docker.internal:host-gateway ghcr.io/ahmedzeyadtareq/markitdown-ocr-localrag-v2
-```
-Open http://localhost:8080. The app reaches Ollama on your computer, and lists the models you've installed there.
+The AI model itself runs in [Ollama](https://ollama.com/), which is separate. Either use the Ollama already on your computer, or let Docker run it for you.
+
+### Which way?
+
+| You want to… | Use | Download the code? |
+|---|---|---|
+| Just use the app, and Ollama is already installed | [1A: ready-made image + your Ollama](#1a-ready-made-image--your-ollama) | No |
+| Just use the app, with no Ollama on your computer | [1B: ready-made image + Ollama in Docker](#1b-ready-made-image--ollama-in-docker) | No (one file) |
+| Build the image from the code yourself (e.g. after changing it) | [2: build the image yourself](#2-build-the-image-yourself) | Yes |
+
+Whichever you pick, the app opens at **http://localhost:8080**, only on your own computer. See [Using the app](#-using-the-app) for what to do next.
+
+### 1A: ready-made image + your Ollama
+
+1. Check that Ollama is running and has a model: `ollama list`. If the list is empty, run `ollama pull gemma3:12b` (or `gemma3:4b` for computers with less memory).
+2. Start the app (one line, works in PowerShell, Command Prompt, and Mac/Linux terminals):
+   ```bash
+   docker run -d --name markitdown-ocr-localrag -p 127.0.0.1:8080:8000 -v markitdown-ocr-localrag-data:/data --add-host=host.docker.internal:host-gateway ghcr.io/ahmedzeyadtareq/markitdown-ocr-localrag-v2
+   ```
+   The first time, Docker downloads the image (a few GB).
+3. Open http://localhost:8080. The **Model** box (bottom left) lists the models installed in your Ollama.
+
+What the command means:
+
+| Part | Meaning |
+|---|---|
+| `-d` | runs in the background, so you can close the terminal |
+| `--name markitdown-ocr-localrag` | a name for stopping and starting it later |
+| `-p 127.0.0.1:8080:8000` | the app is at `localhost:8080`, reachable only from this computer |
+| `-v markitdown-ocr-localrag-data:/data` | your documents and results are kept in a Docker volume, so they survive restarts and updates |
+| `--add-host=host.docker.internal:host-gateway` | lets the app reach the Ollama running on your computer |
 
 On **Linux**, Ollama only accepts connections from the computer itself by default. Let containers reach it by starting it with `OLLAMA_HOST=0.0.0.0 ollama serve` (or the same setting in its systemd service).
 
-### Option B: everything in containers (no Ollama needed)
-Download [`docker-compose.yml`](docker-compose.yml) (or clone this repository), then in the same folder:
-```bash
-docker compose up -d
-```
-Open http://localhost:8080. The first start downloads the model, about 8 GB for `gemma3:12b`. Follow progress with `docker compose logs -f model`. The app starts once the download finishes.
+### 1B: ready-made image + Ollama in Docker
 
-- **NVIDIA GPU** (much faster): also download [`docker-compose.gpu.yml`](docker-compose.gpu.yml), then `docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d`.
-- **Another model:** create a `.env` file next to it (see [`.env.example`](.env.example)) with, for example, `OLLAMA_MODEL=gemma3:4b`.
+You only need one file, [`docker-compose.yml`](docker-compose.yml). It describes three containers: **ollama** (runs the AI model), **model** (downloads the model once, then stops), and **app** (this app, which starts after the download).
+
+1. Make a folder and download the file into it:
+   ```bash
+   mkdir markitdown
+   cd markitdown
+   curl -O https://raw.githubusercontent.com/AhmedZeyadTareq/markitdown-ocr-localrag-v2/main/docker-compose.yml
+   ```
+   In Windows PowerShell, type `curl.exe` instead of `curl`. Or open the link in a browser and save the file.
+2. *(Optional)* Use a smaller model: in the same folder, create a file named `.env` containing `OLLAMA_MODEL=gemma3:4b` (see [`.env.example`](.env.example)). Do this before the first start.
+3. Start everything:
+   ```bash
+   docker compose up -d
+   ```
+   The first start downloads the model, about 8 GB for `gemma3:12b`. Follow it with `docker compose logs -f model`.
+4. When the download finishes, open http://localhost:8080.
+
+- **NVIDIA GPU** (much faster): also download [`docker-compose.gpu.yml`](docker-compose.gpu.yml) into the folder (same `curl` command, ending in `docker-compose.gpu.yml`), then start with `docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d`.
 - **Add more models later:** `docker compose exec ollama ollama pull llama3.2-vision`. They appear in the app's model list.
+- On **Macs**, Docker can't use the GPU. For speed, install Ollama natively and use 1A.
 
-On Macs, Docker can't use the GPU. For speed, install Ollama natively and use Option A.
+### 2: build the image yourself
 
-### Updating, stopping, your data
-- **Update:** `docker pull ghcr.io/ahmedzeyadtareq/markitdown-ocr-localrag-v2`, then recreate the container (Option A) or run `docker compose up -d` (Option B).
-- **Stop / start:** `docker stop markitdown-ocr-localrag` / `docker start markitdown-ocr-localrag`, or `docker compose stop` / `docker compose start`.
-- **Your data** (documents, extracted text, search indexes, chosen model) lives in a Docker volume, so it survives restarts and updates. To use a folder on your computer instead, replace the volume with a path, e.g. `-v ./outputs:/data`.
+Building needs the code, but still nothing besides Docker.
+
+1. Get the code: `git clone https://github.com/AhmedZeyadTareq/markitdown-ocr-localrag-v2.git`, or [download the ZIP](https://github.com/AhmedZeyadTareq/markitdown-ocr-localrag-v2/archive/refs/heads/main.zip) and unzip it. Then open a terminal in that folder (`cd markitdown-ocr-localrag-v2`).
+2. Build and start. The first build takes several minutes.
+   - **With your own Ollama** (like 1A):
+     ```bash
+     docker build -t markitdown-ocr-localrag .
+     docker run -d --name markitdown-ocr-localrag -p 127.0.0.1:8080:8000 -v markitdown-ocr-localrag-data:/data --add-host=host.docker.internal:host-gateway markitdown-ocr-localrag
+     ```
+   - **With Ollama in Docker** (like 1B):
+     ```bash
+     docker compose up -d --build
+     ```
+3. Open http://localhost:8080. After changing the code, run the same build command again (for `docker run`, remove the old container first with `docker rm -f markitdown-ocr-localrag`).
+
+### Stop, update, remove
+
+| | 1A / 2 with `docker run` | 1B / 2 with `docker compose` |
+|---|---|---|
+| Stop | `docker stop markitdown-ocr-localrag` | `docker compose stop` |
+| Start again | `docker start markitdown-ocr-localrag` | `docker compose start` |
+| See logs | `docker logs -f markitdown-ocr-localrag` | `docker compose logs -f app` |
+| Update to the latest version | `docker pull ghcr.io/ahmedzeyadtareq/markitdown-ocr-localrag-v2`, then `docker rm -f markitdown-ocr-localrag`, then the `docker run` command again | `docker compose pull`, then `docker compose up -d` |
+| Remove the app and **all its documents** | `docker rm -f markitdown-ocr-localrag`, then `docker volume rm markitdown-ocr-localrag-data` | `docker compose down -v` |
+
+If you built the image yourself (2), updating means getting the new code (`git pull`) and building again.
+
+**Your data** (documents, extracted text, search indexes, chosen model) lives in a Docker volume, so stopping, restarting, and updating never lose it. To keep it in a folder on your computer instead, replace the volume with a path, e.g. `-v ./outputs:/data`.
 
 Images are published for Intel/AMD and ARM (including Apple Silicon). Releases are tagged by version, e.g. `ghcr.io/ahmedzeyadtareq/markitdown-ocr-localrag-v2:1.0.0`.
+
+### Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| The page doesn't open | Is Docker Desktop running? Check that the app is up with `docker ps` (or `docker compose ps`), and look at the logs (see above) |
+| "Can't reach Ollama" (1A) | Start the Ollama app on your computer. On Linux, see the note in 1A |
+| The model list is empty | 1A: `ollama pull gemma3:12b`. 1B: wait until the model download finishes |
+| Port 8080 is already in use | Use another port: change `127.0.0.1:8080:8000` to e.g. `127.0.0.1:8090:8000` and open `localhost:8090` (in 1B, edit it in `docker-compose.yml`) |
+| Answers are very slow | Pick a smaller model such as `gemma3:4b`, or use the NVIDIA GPU setup |
+| Scanned pages or pictures aren't read well | Pick a model that can read images (not marked "text only") in the **Model** box |
+
+---
+
+## 🧭 Using the app
+
+The same whether you run it with Docker or without it (see Web app below).
+
+1. **Add documents**: click **Add documents**, or drop files anywhere on the page (PDF, Word, PowerPoint, Excel, HTML, text, images, and more). Each one is read automatically.
+2. **Read the text**: the middle of the page shows what was extracted. **Organize text** asks the model to restructure it into clean headings, lists, and tables. **Extracted text / Organized** switches between the two versions.
+3. **Ask this document**: type a question on the right. The answer streams in, using only the document, and the passages it came from are highlighted. Click a passage number to jump to it.
+4. **Model** (bottom left) lists every model installed in Ollama. Pick one and it's used for reading images, organizing, and answering. Models that can't read images are marked "text only".
+5. **Delete** removes the app's copy of a document and everything saved for it. Your original file is never touched.
 
 ---
 
 ## ✨ What it does
 
 1. **Extract**: [MarkItDown](https://github.com/microsoft/markitdown) turns the document into Markdown, keeping headings, lists, and tables.
-2. **Read images**: the `markitdown-ocr` plugin sends images inside documents, and scanned pages, to your local vision model (`gemma3:12b` by default), so mixed documents don't silently lose their scanned parts. With a model that can't read images, fully scanned files fall back to Tesseract OCR.
+2. **Read images**: the `markitdown-ocr` plugin sends images inside documents, and scanned pages, to your local vision model (`gemma3:12b` by default), so mixed documents don't silently lose their scanned parts. With a model that can't read images, scanned files and scanned pages inside PDFs are read with Tesseract OCR instead (images inside other documents are skipped).
 3. **Organize** (optional): the local model restructures the text into clean Markdown, part by part so long documents fit, and keeps the original text for any part where it would drop content.
 4. **Ask**: hybrid search (meaning-based vectors + BM25 keywords, so exact names and numbers are found) picks the relevant passages, and the model answers using only those. In the web app, the passages are highlighted on the page.
 
@@ -78,8 +162,6 @@ pip install -r requirements.txt
 ollama pull gemma3:12b
 ```
 
-To build the Docker image yourself from the cloned folder: `docker compose up -d --build`, or `docker build -t markitdown-ocr-localrag .`
-
 ---
 
 ## 🖥️ Web app
@@ -97,11 +179,7 @@ cd web && npm install && npm run dev   # terminal 2
 ```
 Or build the web app once (`cd web && npm run build`) and run only `python -m backend.api`: it then serves the app too, at http://localhost:8000.
 
-- **Add documents** with the button, or drop files anywhere on the page.
-- **Extracted text / Organized** switches between the two versions; **Organize text** creates the second one.
-- **Ask this document**: answers stream in and the passages they came from are highlighted. Click a passage number to jump to it.
-- **Model** (bottom left) lists every model installed in Ollama. Pick one and it's used for reading images, organizing, and answering. Models that can't read images are marked "text only".
-- **Delete** removes the document's folder from `outputs/`. Your original file is never touched.
+See [Using the app](#-using-the-app) for what to do once it's open.
 
 ## ⌨️ Command line
 
@@ -156,6 +234,7 @@ All settings live in [`backend/config.py`](backend/config.py). Override any of t
 | `TOP_K` | `4` | passages taken from each search |
 | `OUTPUTS_DIR` | `./outputs` | where results are saved |
 | `API_HOST` / `API_PORT` | `127.0.0.1` / `8000` | where the API listens |
+| `WEB_ORIGINS` | *(none)* | extra web addresses allowed to use the API, comma-separated (e.g. behind a reverse proxy) |
 
 Example (PowerShell):
 ```powershell

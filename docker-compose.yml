@@ -11,7 +11,8 @@ services:
     image: ghcr.io/ahmedzeyadtareq/markitdown-ocr-localrag-v2:latest
     build: .
     ports:
-      - "8080:8000"
+      # Only this computer can open the app: it has no login, so don't expose it to the network
+      - "127.0.0.1:8080:8000"
     environment:
       OLLAMA_HOST: http://ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma3:12b}
@@ -33,12 +34,14 @@ services:
       retries: 30
     restart: unless-stopped
 
-  # Pulls the model once, then exits. Already-downloaded models are skipped quickly on later starts.
+  # Pulls the model once, then exits. Already-downloaded models are skipped quickly on later starts,
+  # and without internet an already-downloaded model is enough for the app to start.
   model:
     image: ollama/ollama:0.40.13
     environment:
       OLLAMA_HOST: http://ollama:11434
-    entrypoint: ["ollama", "pull", "${OLLAMA_MODEL:-gemma3:12b}"]
+      MODEL: ${OLLAMA_MODEL:-gemma3:12b}
+    entrypoint: ["/bin/sh", "-c", "ollama pull \"$$MODEL\" || ollama show \"$$MODEL\" > /dev/null"]
     depends_on:
       ollama:
         condition: service_healthy

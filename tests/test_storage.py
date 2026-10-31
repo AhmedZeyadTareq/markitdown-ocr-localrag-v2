@@ -82,6 +82,18 @@ def test_uploading_different_file_under_same_name_discards_results():
         assert f.read() == b"something else"
 
 
+def test_upload_without_extension_can_be_found_and_replaced():
+    doc_id = storage.save_upload("README", b"first")
+    paths = storage.paths_for(doc_id)
+    assert storage.source_file(paths) is not None
+
+    storage.save_upload("README", b"second")
+
+    assert len(os.listdir(paths["folder"])) == 2  # the original and meta.json
+    with open(storage.source_file(paths), "rb") as f:
+        assert f.read() == b"second"
+
+
 def test_source_file_falls_back_to_original_location(make_file):
     doc = make_file("cli.txt", "text")
     paths = storage.output_paths(doc)
@@ -100,3 +112,19 @@ def test_delete_removes_only_the_documents_folder(make_file):
 
     assert doc_id not in storage.list_doc_ids()
     assert os.path.exists(doc), "the user's own file must never be deleted"
+
+
+def test_damaged_meta_doesnt_break_the_document():
+    doc_id = storage.save_upload("a.txt", b"hello")
+    paths = storage.paths_for(doc_id)
+    with open(paths["meta"], "w", encoding="utf-8") as f:
+        f.write("{not json")
+    assert storage.read_meta(paths) == {}
+
+
+def test_differently_cased_upload_uses_the_existing_folders_name(outputs):
+    storage.save_upload("Report.PDF", b"%PDF")
+    if not os.path.isdir(os.path.join(str(outputs), "report_pdf")):
+        pytest.skip("this file system tells Report_PDF and report_pdf apart, so they're separate documents")
+    assert storage.doc_id_for("report.pdf") == "Report_PDF"
+    assert storage.list_doc_ids() == ["Report_PDF"]

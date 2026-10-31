@@ -9,10 +9,15 @@ from backend import config, settings
 
 
 @lru_cache(maxsize=64)
-def _capabilities(model, modified_at):
+def _cached_capabilities(model, modified_at):
     # modified_at is part of the cache key, so a re-pulled model is checked again
+    return tuple(ollama.show(model).capabilities or ())
+
+
+def _capabilities(model, modified_at):
+    # Failures aren't cached (lru_cache skips exceptions), so a brief Ollama hiccup doesn't hide vision for good
     try:
-        return tuple(ollama.show(model).capabilities or ())
+        return _cached_capabilities(model, modified_at)
     except Exception:
         return ()
 

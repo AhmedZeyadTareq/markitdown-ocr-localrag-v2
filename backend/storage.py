@@ -33,7 +33,19 @@ def doc_id_for(filename):
     # Include the extension so report.pdf and report.docx don't share (and reuse) each other's outputs
     doc_id = f"{name}_{ext.lstrip('.')}" if ext else name
     doc_id = re.sub(r"_+", "_", re.sub(r"[^\w.-]+", "_", doc_id))
-    return doc_id.strip("_.") or "document"
+    return _existing_id(doc_id.strip("_.") or "document")
+
+
+def _existing_id(doc_id):
+    """On Windows and macOS, folder names ignore case, so Report.PDF and report.pdf share one folder.
+    Use the name that folder already has, so the id matches the one the document is listed under."""
+    folder = os.path.join(config.OUTPUTS_DIR, doc_id)
+    if not os.path.isdir(folder):
+        return doc_id
+    for existing in list_doc_ids():
+        if existing.lower() == doc_id.lower() and os.path.samefile(os.path.join(config.OUTPUTS_DIR, existing), folder):
+            return existing
+    return doc_id
 
 
 def paths_for(doc_id):
@@ -105,10 +117,13 @@ def save_extraction(content, file_path, paths, log=print):
 
 
 def read_meta(paths):
-    if os.path.exists(paths["meta"]):
+    # A damaged meta.json only loses the original filename; it mustn't break the whole library
+    try:
         with open(paths["meta"], encoding="utf-8") as f:
-            return json.load(f)
-    return {}
+            meta = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    return meta if isinstance(meta, dict) else {}
 
 
 def write_meta(paths, **values):
@@ -129,9 +144,9 @@ def save_upload(filename, data):
     if saved and saved != fingerprint_bytes(data):
         discard_results(paths)
 
-    for old in glob.glob(os.path.join(paths["folder"], "original.*")):
+    for old in glob.glob(os.path.join(paths["folder"], "original*")):
         os.remove(old)
-    ext = os.path.splitext(base_name(filename))[1].lower()
+    ext = os.path.splitext(base_name(filename))[1].lower()  # may be empty, e.g. for README
     with open(os.path.join(paths["folder"], f"original{ext}"), "wb") as f:
         f.write(data)
     write_meta(paths, filename=base_name(filename), source_path=None)
@@ -140,7 +155,7 @@ def save_upload(filename, data):
 
 def source_file(paths):
     """The document to (re-)extract from: the uploaded copy, or the file the command line was pointed at."""
-    uploaded = glob.glob(os.path.join(paths["folder"], "original.*"))
+    uploaded = glob.glob(os.path.join(paths["folder"], "original*"))
     if uploaded:
         return uploaded[0]
     source_path = read_meta(paths).get("source_path")

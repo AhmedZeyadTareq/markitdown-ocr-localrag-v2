@@ -80,3 +80,16 @@ def test_built_web_app_is_served_alongside_the_api(client):
     page = client.get("/")
     assert page.status_code == 200 and "MarkItDown OCR LocalRAG" in page.text
     assert client.get("/api/documents").status_code == 200, "API routes must win over the web app"
+
+
+def test_changes_from_other_websites_are_refused(client):
+    response = client.post("/api/documents", files={"file": ("x.md", b"hi")}, headers={"Origin": "https://evil.example"})
+    assert response.status_code == 403
+    assert client.get("/api/documents").json() == []
+
+
+def test_changes_from_the_app_itself_are_allowed(client):
+    response = client.post("/api/documents", files={"file": ("x.md", b"hi")}, headers={"Origin": "http://testserver"})
+    assert response.status_code == 200
+    response = client.post("/api/documents", files={"file": ("y.md", b"hi")}, headers={"Origin": "http://localhost:3000"})
+    assert response.status_code == 200

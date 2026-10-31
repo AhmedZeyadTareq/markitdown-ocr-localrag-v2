@@ -5,12 +5,14 @@ import asyncio
 import json
 import os
 import threading
+from collections import OrderedDict
 from datetime import datetime, timezone
+from urllib.parse import urlsplit
 
 import uvicorn
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -22,8 +24,28 @@ from backend.rag import DocumentRAG
 app = FastAPI(title="MarkItDown OCR LocalRAG")
 app.add_middleware(CORSMiddleware, allow_origins=config.WEB_ORIGINS, allow_methods=["*"], allow_headers=["*"])
 
+
+@app.middleware("http")
+async def reject_other_sites(request, call_next):
+    """Browsers let any website send form uploads and plain POSTs to this server; CORS only hides the replies.
+    So changes are accepted only from this app's own pages (or from tools like curl, which send no Origin)."""
+    origin = request.headers.get("origin")
+    if (
+        request.method not in ("GET", "HEAD", "OPTIONS")
+        and origin
+        and origin not in config.WEB_ORIGINS
+        and urlsplit(origin).netloc != request.headers.get("host")
+    ):
+        return JSONResponse({"detail": "Requests from other websites aren't allowed."}, status_code=403)
+    return await call_next(request)
+
+
 _doc_locks: dict[str, threading.Lock] = {}
-_rag_cache: dict[tuple[str, str], tuple[str, DocumentRAG]] = {}
+# Search indexes for the most recently asked documents, kept in memory so follow-up questions are fast
+RAG_CACHE_SIZE = 8
+_rag_cache: OrderedDict[tuple[str, str], tuple[str, DocumentRAG]] = OrderedDict()
+_rag_cache_lock = threading.Lock()
+_rag_build_locks: dict[tuple[str, str], threading.Lock] = {}
 
 
 def _lock_for(doc_id):
@@ -128,10 +150,11 @@ def list_documents():
 
 
 @app.post("/api/documents")
-async def upload_document(file: UploadFile = File(...)):
+def upload_document(file: UploadFile = File(...)):
+    # Plain def so FastAPI runs it in a worker thread: waiting on the document lock mustn't block the event loop
     if not file.filename:
         raise HTTPException(400, "The upload has no filename.")
-    data = await file.read()
+    data = file.file.read()
     if not data:
         raise HTTPException(400, "The file is empty.")
     doc_id = storage.doc_id_for(file.filename)
@@ -151,8 +174,9 @@ def delete_document(doc_id: str):
     _paths(doc_id)
     with _lock_for(doc_id):
         storage.delete_document(doc_id)
-        for version in storage.VERSIONS:
-            _rag_cache.pop((doc_id, version), None)
+        with _rag_cache_lock:
+            for version in storage.VERSIONS:
+                _rag_cache.pop((doc_id, version), None)
     return {"deleted": doc_id}
 
 
@@ -202,13 +226,22 @@ class ChatRequest(BaseModel):
 
 
 def _rag_for(doc_id, version, paths, log):
+    key = (doc_id, version)
     text = storage.load_content(paths[version])
     digest = storage.fingerprint_bytes(text.encode("utf-8"))
-    cached = _rag_cache.get((doc_id, version))
-    if cached and cached[0] == digest:
-        return text, cached[1]
-    rag = DocumentRAG(text, paths[f"index_{version}"], log)
-    _rag_cache[(doc_id, version)] = (digest, rag)
+    # One build per document version at a time: two first questions mustn't write the same index folder at once
+    with _rag_build_locks.setdefault(key, threading.Lock()):
+        with _rag_cache_lock:
+            cached = _rag_cache.get(key)
+            if cached and cached[0] == digest:
+                _rag_cache.move_to_end(key)
+                return text, cached[1]
+        rag = DocumentRAG(text, paths[f"index_{version}"], log)
+        with _rag_cache_lock:
+            _rag_cache[key] = (digest, rag)
+            _rag_cache.move_to_end(key)
+            while len(_rag_cache) > RAG_CACHE_SIZE:
+                _rag_cache.popitem(last=False)
     return text, rag
 
 
@@ -229,7 +262,7 @@ def chat(doc_id: str, request: ChatRequest):
         text, rag = _rag_for(doc_id, request.version, paths, _logger(emit))
         sources = rag.retrieve(question)
         # Character positions let the UI highlight exactly where each passage sits in the document
-        emit({"type": "sources", "sources": [{"text": s, "start": text.find(s)} for s in sources]})
+        emit({"type": "sources", "sources": [{"text": s, "start": rag.start_of(s, text)} for s in sources]})
         for token in rag.answer_stream(question, sources):
             emit({"type": "token", "text": token})
         emit({"type": "done"})

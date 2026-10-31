@@ -46,8 +46,7 @@ def clean_markdown(markdown):
     return OCR_MARKERS.sub(lambda m: m.group(1).strip(), markdown)
 
 
-def _build_markitdown(log):
-    status = llm.status()
+def _build_markitdown(status, log):
     if status["vision"]:
         log(f"[👁️] Images and scanned pages will be read by {status['model']}.")
         return MarkItDown(
@@ -60,7 +59,7 @@ def _build_markitdown(log):
         reason = f"{status['model']} can't read images"
     else:
         reason = "The model isn't available"
-    log(f"[⚠️] {reason}: images inside documents will be skipped (Tesseract is used only for fully scanned files).")
+    log(f"[⚠️] {reason}: images inside documents will be skipped (Tesseract reads scanned pages).")
     return MarkItDown()
 
 
@@ -80,13 +79,50 @@ def _tesseract(file_path, log):
     return text
 
 
+def _textless_pdf_pages(file_path):
+    from pdfminer.high_level import extract_pages
+    from pdfminer.layout import LTTextContainer
+
+    return [
+        number for number, page in enumerate(extract_pages(file_path), 1)
+        if not any(isinstance(element, LTTextContainer) and element.get_text().strip() for element in page)
+    ]
+
+
+def _ocr_scanned_pdf_pages(file_path, log):
+    """Without a model that reads images, MarkItDown skips scanned pages in a PDF that also has text pages.
+    Reads those pages with Tesseract and returns them as a section to add at the end, or "" if there are none."""
+    try:
+        pages = _textless_pdf_pages(file_path)
+        if not pages:
+            return ""
+        log(f"[🔁] Page(s) {', '.join(map(str, pages))} have no text layer, reading them via OCR...")
+        sections = []
+        for number in pages:
+            image = convert_from_path(file_path, first_page=number, last_page=number, poppler_path=POPPLER_PATH)[0]
+            text = pytesseract.image_to_string(image, lang="eng").strip()
+            if text:
+                sections.append(f"### Page {number}\n\n{text}")
+    except Exception as e:
+        log(f"[⚠️] Couldn't read the scanned pages via OCR: {e}")
+        return ""
+    if not sections:
+        return ""
+    log(f"[✔] {len(sections)} scanned page(s) read via OCR, added at the end.")
+    return "\n\n## Scanned pages (read via OCR)\n\n" + "\n\n".join(sections)
+
+
 def extract(file_path, log=print):
+    status = llm.status()
     try:
         log("[🔍] Trying structured text extraction via MarkItDown...")
-        markdown = _build_markitdown(log).convert(file_path).markdown
+        markdown = _build_markitdown(status, log).convert(file_path).markdown
         if markdown.strip():
             log("[✔] Markdown extracted via MarkItDown.")
-            return clean_markdown(markdown)
+            markdown = clean_markdown(markdown)
+            if not status["vision"] and file_path.lower().endswith(".pdf"):
+                markdown += _ocr_scanned_pdf_pages(file_path, log)
+            return markdown
         log("[⚠️] No text found via MarkItDown, falling back to OCR...")
     except Exception as e:
         log(f"[❌] MarkItDown failed: {e}")

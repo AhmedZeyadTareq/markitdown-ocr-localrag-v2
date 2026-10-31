@@ -39,7 +39,8 @@ export function Workspace() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [version, setVersion] = useState<Version>("raw");
   const [texts, setTexts] = useState<Record<string, string>>({});
-  const [textError, setTextError] = useState<string | null>(null);
+  // Tied to the text it belongs to, so a failure for one document isn't shown on another
+  const [textError, setTextError] = useState<{ key: string; message: string } | null>(null);
   const [job, setJob] = useState<Job | null>(null);
   const [messages, setMessages] = useState<Record<string, Message[]>>({});
   const [focus, setFocus] = useState<Focus | null>(null);
@@ -83,7 +84,7 @@ export function Workspace() {
     setTextError(null);
     getText(selected.id, version)
       .then((text) => !cancelled && setTexts((t) => ({ ...t, [textKey]: text })))
-      .catch((e) => !cancelled && setTextError(errorMessage(e)));
+      .catch((e) => !cancelled && setTextError({ key: textKey, message: errorMessage(e) }));
     return () => {
       cancelled = true;
     };
@@ -248,7 +249,7 @@ export function Workspace() {
         version={version}
         onVersionChange={changeVersion}
         text={texts[textKey]}
-        textError={textError}
+        textError={textError?.key === textKey ? textError.message : null}
         job={job && job.docId === selected?.id ? job : null}
         otherJobRunning={!!job && !job.error && job.docId !== selected?.id}
         focus={focus}

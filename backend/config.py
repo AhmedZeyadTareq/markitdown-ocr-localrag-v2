@@ -35,6 +35,8 @@ TOP_K = _env("TOP_K", 4, int)  # passages taken from each of the two searches
 # Web API
 API_HOST = _env("API_HOST", "127.0.0.1")
 API_PORT = _env("API_PORT", 8000, int)
-WEB_ORIGINS = ["http://localhost:3000", "http://127.0.0.1:3000"]  # the Next.js dev server
+# Other web addresses allowed to use the API: the Next.js dev server, plus any comma-separated extras,
+# e.g. when the app sits behind a reverse proxy under another name
+WEB_ORIGINS = ["http://localhost:3000", "http://127.0.0.1:3000"] + _env("WEB_ORIGINS", [], lambda v: [o.strip().rstrip("/") for o in v.split(",")])
 # The built web app (cd web && npm run build). When it exists, the API serves it too, so one port is enough.
 WEB_DIST = _env("WEB_DIST", os.path.join(APP_DIR, "web", "out"))

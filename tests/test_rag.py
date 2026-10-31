@@ -26,3 +26,10 @@ def test_index_is_reused_until_text_changes(tmp_path):
     messages.clear()
     DocumentRAG(REPORT + "\n\nAppendix: new text.", index_dir, log=messages.append)
     assert any("Building search index" in m for m in messages)
+
+
+def test_passage_positions_point_at_their_own_place(tmp_path):
+    # The short last passage also appears inside the first one; it must be placed at the end
+    text = "Total: 0 items were lost. " + "Filler sentence about logistics. " * 40 + "\n\nTotal: 0"
+    rag = DocumentRAG(text, str(tmp_path / "index"), log=lambda _: None)
+    assert rag.start_of("Total: 0", text) == text.rindex("Total: 0")

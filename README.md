@@ -14,7 +14,7 @@ You only need [Docker](https://www.docker.com/products/docker-desktop/). The ima
 
 ### Option A: you already have Ollama
 ```bash
-docker run -d --name markitdown-ocr-localrag -p 8080:8000 -v markitdown-ocr-localrag-data:/data \
+docker run -d --name markitdown-ocr-localrag -p 127.0.0.1:8080:8000 -v markitdown-ocr-localrag-data:/data \
   --add-host=host.docker.internal:host-gateway ghcr.io/ahmedzeyadtareq/markitdown-ocr-localrag-v2
 ```
 Open http://localhost:8080. The app reaches Ollama on your computer, and lists the models you've installed there.

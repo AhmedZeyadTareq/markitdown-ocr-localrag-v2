@@ -7,6 +7,8 @@ from fastapi.testclient import TestClient
 from backend import config, llm, settings
 from backend.api import app
 
+REAL_CAPABILITIES = llm._capabilities  # the fixture below replaces it with a fake
+
 INSTALLED = {
     "gemma3:12b": ("completion", "vision"),
     "qwen2.5:0.5b": ("completion",),
@@ -71,3 +73,18 @@ def test_api_rejects_unknown_model():
 @pytest.mark.parametrize("reported, shown", [("11.8B", "12B"), ("494.03M", "0.5B"), ("3.2B", "3.2B"), ("7B", "7B"), (None, None)])
 def test_sizes_are_shown_in_billions(reported, shown):
     assert llm._billions(reported) == shown
+
+
+def test_failed_capability_check_is_retried(monkeypatch):
+    replies = [ConnectionError("Ollama is restarting"), SimpleNamespace(capabilities=["completion", "vision"])]
+
+    def show(model):
+        reply = replies.pop(0)
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
+
+    monkeypatch.setattr(llm.ollama, "show", show)
+    llm._cached_capabilities.cache_clear()
+    assert REAL_CAPABILITIES("gemma3:12b", "t") == ()
+    assert REAL_CAPABILITIES("gemma3:12b", "t") == ("completion", "vision"), "the failure must not be remembered"

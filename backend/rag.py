@@ -27,14 +27,20 @@ def _get_embeddings():
     return _embeddings
 
 
-def split(text):
+def split_with_starts(text):
+    """The search passages, each with the character position where it starts in the text."""
     from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-    splitter = RecursiveCharacterTextSplitter(chunk_size=config.SEARCH_CHUNK_CHARS, chunk_overlap=config.SEARCH_CHUNK_OVERLAP)
-    return splitter.split_text(text)
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=config.SEARCH_CHUNK_CHARS, chunk_overlap=config.SEARCH_CHUNK_OVERLAP, add_start_index=True)
+    return [(d.page_content, d.metadata["start_index"]) for d in splitter.create_documents([text])]
 
 
-def _load_or_build_index(text, index_dir, log):
+def split(text):
+    return [passage for passage, _ in split_with_starts(text)]
+
+
+def _load_or_build_index(text, passages, index_dir, log):
     from langchain_community.vectorstores import FAISS
 
     embeddings = _get_embeddings()
@@ -51,7 +57,7 @@ def _load_or_build_index(text, index_dir, log):
                 return FAISS.load_local(index_dir, embeddings, allow_dangerous_deserialization=True)
 
     log("[🔄] Building search index...")
-    db = FAISS.from_texts(split(text), embeddings)
+    db = FAISS.from_texts(passages, embeddings)
     db.save_local(index_dir)
     with open(digest_file, "w", encoding="utf-8") as f:
         f.write(digest)
@@ -62,9 +68,16 @@ class DocumentRAG:
     def __init__(self, text, index_dir, log=print):
         from langchain_community.retrievers import BM25Retriever
 
+        chunks = split_with_starts(text)
+        passages = [passage for passage, _ in chunks]
+        # Where each passage sits, so a short passage that also appears earlier in the text is placed correctly
+        self._starts = {}
+        for passage, start in chunks:
+            self._starts.setdefault(passage, start)
+
         # Vector search understands meaning; BM25 catches exact terms like names, codes, and numbers
-        self.vector_retriever = _load_or_build_index(text, index_dir, log).as_retriever(search_kwargs={"k": config.TOP_K})
-        self.keyword_retriever = BM25Retriever.from_texts(split(text))
+        self.vector_retriever = _load_or_build_index(text, passages, index_dir, log).as_retriever(search_kwargs={"k": config.TOP_K})
+        self.keyword_retriever = BM25Retriever.from_texts(passages)
         self.keyword_retriever.k = config.TOP_K
 
     def retrieve(self, question):
@@ -74,6 +87,10 @@ class DocumentRAG:
             for rank, doc in enumerate(retriever.invoke(question)):
                 scores[doc.page_content] = scores.get(doc.page_content, 0) + 1 / (60 + rank)
         return sorted(scores, key=scores.get, reverse=True)[:config.TOP_K + 2]
+
+    def start_of(self, passage, text):
+        """Character position of a retrieved passage in the text, or -1 if it can't be found."""
+        return self._starts.get(passage, text.find(passage))
 
     def answer_stream(self, question, sources):
         context = "\n\n---\n\n".join(sources)

@@ -8,6 +8,93 @@ It comes as a web app, a command-line tool, and a ready-made Docker image.
 
 ---
 
+## 🚀 Ways to run the app
+
+Pick one option. The commands are below the table, and the sections after them explain each option step by step.
+
+| # | Option | Best for | You need | Opens at |
+|---|---|---|---|---|
+| 1A | Docker: ready-made image + your Ollama | Using the app, with Ollama already installed | Docker, Ollama with a model | http://localhost:8080 |
+| 1B | Docker: ready-made image + Ollama in Docker | Using the app, with no Ollama on your computer | Docker, the `docker-compose.yml` file | http://localhost:8080 |
+| 2 | Docker: build the image yourself | Running your own changes in Docker | Docker, the code | http://localhost:8080 |
+| 3 | `start.ps1` script | Developing on Windows | The [full install](#-install-without-docker) | http://localhost:3000 |
+| 4 | Two terminals | Developing on any OS | The [full install](#-install-without-docker) | http://localhost:3000 |
+| 5 | Single server | Running without Docker, with only one process | The [full install](#-install-without-docker) | http://localhost:8000 |
+| 6 | Command line | Working in the terminal, with no web app | The [full install](#-install-without-docker), without Node.js | Runs in the terminal |
+
+### With Docker
+
+**Option 1A: ready-made image + your Ollama** ([details](#1a-ready-made-image--your-ollama))
+```bash
+docker run -d --name markitdown-ocr-localrag -p 127.0.0.1:8080:8000 -v markitdown-ocr-localrag-data:/data --add-host=host.docker.internal:host-gateway ghcr.io/ahmedzeyadtareq/markitdown-ocr-localrag-v2
+```
+
+**Option 1B: ready-made image + Ollama in Docker** ([details](#1b-ready-made-image--ollama-in-docker))
+
+Run this in the folder that contains `docker-compose.yml`:
+```bash
+docker compose up -d
+```
+With an NVIDIA GPU, which is much faster, also download `docker-compose.gpu.yml` and run this instead:
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+```
+
+**Option 2: build the image yourself** ([details](#2-build-the-image-yourself))
+
+Run these in the code folder. With your own Ollama:
+```bash
+docker build -t markitdown-ocr-localrag .
+docker run -d --name markitdown-ocr-localrag -p 127.0.0.1:8080:8000 -v markitdown-ocr-localrag-data:/data --add-host=host.docker.internal:host-gateway markitdown-ocr-localrag
+```
+With Ollama in Docker:
+```bash
+docker compose up -d --build
+```
+
+### Without Docker
+
+Do the [full install](#-install-without-docker) first, and run these commands in the code folder.
+
+**Option 3: `start.ps1` script (Windows)**
+```powershell
+.\start.ps1
+```
+
+**Option 4: two terminals (any OS)**
+
+Terminal 1:
+```bash
+python -m backend.api
+```
+Terminal 2:
+```bash
+cd web
+npm install
+npm run dev
+```
+
+**Option 5: single server**
+
+Build the web app once, and again after changing it:
+```bash
+cd web
+npm install
+npm run build
+cd ..
+```
+Then start the server:
+```bash
+python -m backend.api
+```
+
+**Option 6: command line**
+```bash
+python cli.py
+```
+
+---
+
 ## 🐳 Quick start with Docker
 
 With Docker you don't install Python, Node.js, Tesseract, or anything else: it's all inside the image (web app, API, OCR tools, and search model). Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) and make sure it's running.
